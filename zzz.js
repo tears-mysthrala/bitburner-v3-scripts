@@ -6,18 +6,12 @@ export async function main(ns) {
 	
 	ns.tprint('=== ZZZ START === Phase: ' + phase);
 	
-	// Descargar helpers si falta
-	if (!ns.fileExists('helpers.js')) {
-		ns.tprint('DL: helpers.js');
-		await ns.wget(URL + 'helpers.js?t=' + Date.now(), 'helpers.js');
-	}
-	
 	while (true) {
 		loops++;
 		const p = ns.getPlayer();
 		const m = p.money;
 		
-		// Log cada 15 segundos (loops % 5 con sleep 3s)
+		// Log cada 5 loops
 		if (loops % 5 === 0) {
 			ns.tprint('P' + phase + ' | $' + Math.floor(m/1000) + 'k | H' + p.skills.hacking);
 		}
@@ -30,11 +24,8 @@ export async function main(ns) {
 				return;
 			}
 			
-			// Nuke y hack n00dles
+			// Solo hack - NO singularity
 			try {
-				if (!ns.hasRootAccess('n00dles')) {
-					try { await ns.nuke('n00dles'); } catch(e) {}
-				}
 				await ns.hack('n00dles');
 			} catch(e) {}
 		}
@@ -58,15 +49,14 @@ export async function main(ns) {
 			}
 		}
 		
-		// === PHASE 2: Download daemon ===
+		// === PHASE 2: Setup tools ===
 		else if (phase === 2) {
 			ns.tprint('P2: DL tools');
-			const tools = ['daemon.js', 'analyze-hack.js', 'host-manager.js'];
+			const tools = ['daemon.js', 'analyze-hack.js', 'host-manager.js', 'autopilot.js'];
 			for (const f of tools) {
 				if (!ns.fileExists(f)) {
-					ns.tprint('DL: ' + f);
 					await ns.wget(URL + f + '?t=' + Date.now(), f);
-					await ns.sleep(300);
+					await ns.sleep(200);
 				}
 			}
 			ns.tprint('P2 -> P3');
@@ -74,25 +64,22 @@ export async function main(ns) {
 			return;
 		}
 		
-		// === PHASE 3: Run daemon ===
+		// === PHASE 3: Run tools ===
 		else if (phase === 3) {
-			if (!ns.ps('home').find(x => x.filename === 'daemon.js')) {
-				ns.tprint('Start daemon');
-				ns.run('daemon.js');
+			// Usar autopilot en lugar de daemon (mas estable)
+			if (!ns.ps('home').find(x => x.filename === 'autopilot.js')) {
+				ns.tprint('Start autopilot');
+				ns.run('autopilot.js');
 			}
 			
-			if (!ns.ps('home').find(x => x.filename === 'host-manager.js')) {
-				ns.run('host-manager.js', 1, '--max-spend', '0.3');
-			}
-			
-			if (p.skills.hacking >= 50) {
+			if (p.skills.hacking >= 100) {
 				ns.tprint('P3 -> P4');
 				ns.spawn('zzz.js', 1, '4');
 				return;
 			}
 		}
 		
-		// === PHASE 4: Factions ===
+		// === PHASE 4: Factions (sin singularity) ===
 		else if (phase === 4) {
 			if (!ns.fileExists('work-for-factions.js')) {
 				await ns.wget(URL + 'work-for-factions.js?t=' + Date.now(), 'work-for-factions.js');
@@ -103,20 +90,11 @@ export async function main(ns) {
 				ns.tprint('Start factions');
 			}
 			
-			// Check augs cada ~50 loops (2.5 min)
-			if (loops % 50 === 0) {
-				try {
-					const owned = ns.singularity.getOwnedAugmentations(true);
-					const base = ns.singularity.getOwnedAugmentations(false);
-					const newAugs = owned.length - base.length;
-					ns.tprint('Augs: ' + newAugs);
-					
-					if (newAugs >= 6) {
-						ns.tprint('P4 -> P5');
-						ns.spawn('zzz.js', 1, '5');
-						return;
-					}
-				} catch(e) {}
+			// Check simple: mucho dinero = pasar a install
+			if (m > 50e9 && loops > 1000) {
+				ns.tprint('P4 -> P5');
+				ns.spawn('zzz.js', 1, '5');
+				return;
 			}
 		}
 		
@@ -144,9 +122,9 @@ export async function main(ns) {
 			}
 		}
 		
-		// Reset si phase invalido
+		// Reset
 		else {
-			ns.tprint('Invalid phase: ' + phase + ', reset to 0');
+			ns.tprint('Invalid phase: ' + phase + ', reset');
 			ns.spawn('zzz.js', 1, '0');
 			return;
 		}
