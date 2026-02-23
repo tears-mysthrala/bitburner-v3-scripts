@@ -89,8 +89,8 @@ export async function main(ns) {
 	
 	// Scripts esenciales en orden
 	const essential = [
-		'run.js',              // <-- NUEVO: launcher principal (8GB compatible)
-		'casino.js',
+		'auto.js',             // <-- NUEVO: launcher v3.0 (8GB compatible)
+		'run.js',
 		'daemon.js',
 		'helpers.js',
 		'autopilot.js',
@@ -152,20 +152,19 @@ export async function main(ns) {
 	ns.print("");
 	
 	// Iniciar el launcher principal
-	if (ns.fileExists('run.js')) {
-		ns.print("  Iniciando RUN (Zero To Hero)...");
-		ns.print("");
-		ns.print("════════════════════════════════════════════════════════");
-		
-		await ns.sleep(2000);
-		const pid = ns.run('run.js');
-		if (pid > 0) {
-			ns.print(`✅ run.js iniciado (PID: ${pid})`);
-			ns.print("📋 Escribe: tail run.js");
-		}
+	const launcher = ns.fileExists('auto.js') ? 'auto.js' : 'run.js';
+	ns.print(`  Iniciando ${launcher}...`);
+	ns.print("");
+	ns.print("════════════════════════════════════════════════════════");
+	
+	await ns.sleep(2000);
+	const pid = ns.run(launcher);
+	if (pid > 0) {
+		ns.print(`✅ ${launcher} iniciado (PID: ${pid})`);
+		ns.print(`📋 Escribe: tail ${launcher}`);
 	} else {
-		ns.print("  Ejecuta manualmente:");
-		ns.print("    run run.js");
-		ns.print("════════════════════════════════════════════════════════");
+		ns.print(`❌ Error iniciando ${launcher}`);
+		ns.print("  Intenta manualmente:");
+		ns.print(`    run ${launcher}`);
 	}
 }
