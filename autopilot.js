@@ -1,6 +1,7 @@
 /**
- * AUTOPILOT - Bitburner Automation (Fork Independiente)
- * Version: 2.0
+ * AUTOPILOT - Bitburner Automation
+ * Version: 3.0.0-dev
+ * Compatible: Bitburner v3.0.0dev
  * 
  * Script principal que automatiza el juego desde cero.
  * Uso: run autopilot.js
@@ -30,8 +31,13 @@ export async function main(ns) {
     let state = loadState(ns);
     
     ns.print("╔════════════════════════════════════════════════════╗");
-    ns.print("║        AUTOPILOT v1.2 - Bitburner Automation       ║");
+    ns.print("║     AUTOPILOT v3.0.0-dev - Bitburner v3.0         ║");
     ns.print("╚════════════════════════════════════════════════════╝");
+    ns.print("");
+    
+    // Verificar si tenemos SF4 (singularity)
+    const hasSF4 = checkSF4(ns);
+    ns.print(`INFO: Singularity (SF4) disponible: ${hasSF4}`);
     ns.print("");
     
     while (true) {
@@ -40,8 +46,9 @@ export async function main(ns) {
             const money = player.money;
             const hackLevel = player.skills.hacking;
             
+            // Log cada 30s
             if (Date.now() % 30000 < 1000) {
-                ns.print(`[${getPhaseName(state.phase)}] $${formatMoney(money)} | Hack: ${hackLevel}`);
+                ns.print(`[${getPhaseName(state.phase)}] $${formatMoney(money)} | Hack: ${hackLevel} | RAM: ${ns.getServerMaxRam('home')}GB`);
             }
             
             switch (state.phase) {
@@ -55,13 +62,13 @@ export async function main(ns) {
                     await phaseCasino(ns, state, money);
                     break;
                 case PHASES.HACKING:
-                    await phaseHacking(ns, state, hackLevel);
+                    await phaseHacking(ns, state, hackLevel, hasSF4);
                     break;
                 case PHASES.FACTIONS:
-                    await phaseFactions(ns, state, money);
+                    await phaseFactions(ns, state, money, hasSF4);
                     break;
                 case PHASES.INSTALL:
-                    await phaseInstall(ns, state);
+                    await phaseInstall(ns, state, hasSF4);
                     break;
             }
             
@@ -75,38 +82,35 @@ export async function main(ns) {
     }
 }
 
-// ============================================
-// FASES
-// ============================================
+function checkSF4(ns) {
+    try {
+        ns.singularity.getOwnedAugmentations(true);
+        return true;
+    } catch(e) {
+        return false;
+    }
+}
 
 async function phaseDownload(ns, state) {
-    ns.print("📥 Fase DOWNLOAD: Descargando repo completo...");
+    ns.print("[DOWNLOAD] Descargando repo completo...");
     
-    // Descargar git-pull.js primero
-    ns.print("Descargando git-pull.js...");
-    await ns.wget(CONFIG.repoUrl + 'git-pull.js?t=' + Date.now(), 'git-pull.js');
-    
+    // Descargar git-pull.js
     if (!ns.fileExists('git-pull.js')) {
-        ns.print("✗ Error descargando git-pull.js");
-        // Fallback: descargar manualmente los esenciales
-        await downloadEssential(ns);
-    } else {
-        ns.print("✓ git-pull.js descargado");
-        ns.print("Ejecutando git-pull.js para descargar TODO el repo...");
-        
-        // Ejecutar git-pull.js
+        ns.print("  Descargando git-pull.js...");
+        await ns.wget(CONFIG.repoUrl + 'git-pull.js?t=' + Date.now(), 'git-pull.js');
+    }
+    
+    // Ejecutar git-pull.js para descargar todo
+    if (ns.fileExists('git-pull.js')) {
+        ns.print("  Ejecutando git-pull.js...");
         const pid = ns.run('git-pull.js');
         if (pid > 0) {
-            // Esperar a que termine (max 60 segundos)
             let attempts = 0;
             while (ns.isRunning(pid) && attempts < 60) {
                 await ns.sleep(1000);
                 attempts++;
             }
-            ns.print("✓ git-pull.js completado");
-        } else {
-            ns.print("✗ No se pudo ejecutar git-pull.js, usando fallback");
-            await downloadEssential(ns);
+            ns.print("  ✓ Repo descargado");
         }
     }
     
@@ -121,111 +125,95 @@ async function phaseDownload(ns, state) {
     }
 }
 
-async function downloadEssential(ns) {
-    ns.print("Descargando archivos esenciales (fallback)...");
-    
-    // Lista completa de archivos importantes
-    const files = [
-        // Core
-        'helpers.js', 'casino.js', 'daemon.js', 'ascend.js', 'kill-all-scripts.js',
-        // Analysis
-        'analyze-hack.js', 'stats.js', 'scan.js',
-        // Factions
-        'work-for-factions.js', 'faction-manager.js',
-        // Money
-        'stockmaster.js', 'hacknet-upgrade-manager.js',
-        // Features
-        'host-manager.js', 'sleeve.js', 'bladeburner.js', 'gangs.js', 'go.js',
-        // Utils
-        'cleanup.js', 'reserve.js', 'grep.js', 'run-command.js',
-        // Tasks (en subcarpeta)
-        '/Tasks/crack-host.js', '/Tasks/grow-host.js', '/Tasks/hack-host.js', 
-        '/Tasks/weaken-host.js', '/Tasks/contractor.js'
-    ];
-    
-    let ok = 0, fail = 0;
-    for (const file of files) {
-        if (!ns.fileExists(file)) {
-            const success = await ns.wget(CONFIG.repoUrl + file + '?t=' + Date.now(), file);
-            if (success) ok++; else fail++;
-            if (fail === 0 || ok % 5 === 0) {
-                ns.print(`  Progreso: ${ok} OK, ${fail} FAIL`);
-            }
-            await ns.sleep(50);
-        }
-    }
-    
-    ns.print(`✓ Descarga completa: ${ok} archivos nuevos, ${fail} fallos`);
-}
-
 async function phaseEarly(ns, state, money) {
     if (money >= 200000) {
-        ns.print("✅ Early complete! Tenemos $200k");
+        ns.print("[EARLY] ✓ Objetivo alcanzado: $200k");
         state.phase = PHASES.CASINO;
         return;
     }
     
-    ns.print(`💰 Farmeando... $${formatMoney(money)} / $200k`);
-    
+    // Farmear n00dles
     try {
         const earned = await ns.hack('n00dles');
-        if (earned > 0) {
-            ns.print(`  +$${formatMoney(earned)} de n00dles`);
+        if (earned > 0 && Date.now() % 10000 < 2000) {
+            ns.print(`[EARLY] +$${formatMoney(earned)} | Total: $${formatMoney(money)}`);
         }
     } catch (e) {}
 }
 
 async function phaseCasino(ns, state, money) {
     if (money >= CONFIG.casinoGoal) {
-        ns.print("✅ Casino complete! Tenemos $10B");
+        ns.print("[CASINO] ✓ Objetivo alcanzado: $10B");
         killScript(ns, 'casino.js');
         state.phase = PHASES.HACKING;
         return;
     }
     
     if (!isScriptRunning(ns, 'casino.js')) {
-        ns.print("🎰 Iniciando casino.js...");
+        ns.print("[CASINO] Iniciando casino.js...");
         ns.run('casino.js');
     }
-    
-    ns.print(`🎰 Casino activo: $${formatMoney(money)} / $${formatMoney(CONFIG.casinoGoal)}`);
 }
 
-async function phaseHacking(ns, state, hackLevel) {
+async function phaseHacking(ns, state, hackLevel, hasSF4) {
+    // Iniciar daemon
     if (!isScriptRunning(ns, 'daemon.js')) {
-        ns.print("👹 Iniciando daemon.js...");
+        ns.print("[HACKING] Iniciando daemon.js...");
+        // Con --no-tail-windows para v3.0
         ns.run('daemon.js', 1, '--no-tail-windows');
     }
     
-    ns.print(`👹 Daemon activo | Hack: ${hackLevel}`);
+    // Iniciar stockmaster si tenemos dinero
+    if (!isScriptRunning(ns, 'stockmaster.js') && ns.getPlayer().money > 6e9) {
+        ns.run('stockmaster.js', 1, '--disable-purchase-tix-api');
+    }
     
-    if (hackLevel >= CONFIG.minHackForFactions) {
-        ns.print("🎉 Hack 50+ alcanzado!");
+    // Host-manager (SIN --max-spend, con flags correctos para v3.0)
+    if (!isScriptRunning(ns, 'host-manager.js')) {
+        ns.print("[HACKING] Iniciando host-manager.js...");
+        // Usar -c (continuous) y --reserve-percent 0.5 para gastar mas dinero en servidores
+        ns.run('host-manager.js', 1, '-c', '--reserve-percent', '0.5');
+    }
+    
+    // Pasar a factions si tenemos SF4 y hack suficiente
+    if (hasSF4 && hackLevel >= CONFIG.minHackForFactions) {
+        ns.print("[HACKING] ✓ Hack 50+ y SF4 disponible");
         state.phase = PHASES.FACTIONS;
     }
 }
 
-async function phaseFactions(ns, state, money) {
-    if (!isScriptRunning(ns, 'work-for-factions.js')) {
-        ns.print("🏛️ Iniciando work-for-factions.js...");
-        const pid = ns.run('work-for-factions.js');
-        if (pid === 0) {
-            ns.print("⚠️ No se pudo iniciar (probablemente falta SF4)");
+async function phaseFactions(ns, state, money, hasSF4) {
+    // Sin SF4, no podemos automatizar facciones
+    if (!hasSF4) {
+        if (Date.now() % 30000 < 1000) {
+            ns.print("[FACTIONS] SF4 no disponible, quedandose en HACKING");
         }
+        state.phase = PHASES.HACKING;
+        return;
     }
     
-    ns.print(`🏛️ Factions activo | Dinero: $${formatMoney(money)}`);
+    // Iniciar work-for-factions
+    if (!isScriptRunning(ns, 'work-for-factions.js')) {
+        ns.print("[FACTIONS] Iniciando work-for-factions.js...");
+        ns.run('work-for-factions.js');
+    }
     
+    // Si tenemos mucho dinero, intentar install
     if (money > 50e9) {
-        ns.print("💰 Mucho dinero, verificando augmentations...");
         state.phase = PHASES.INSTALL;
     }
 }
 
-async function phaseInstall(ns, state) {
-    ns.print("⬆️ Fase INSTALL: Instalando augmentations...");
+async function phaseInstall(ns, state, hasSF4) {
+    if (!hasSF4) {
+        ns.print("[INSTALL] SF4 requerido para install automatico");
+        state.phase = PHASES.HACKING;
+        return;
+    }
     
-    ns.print("🛑 Deteniendo scripts...");
+    ns.print("[INSTALL] Instalando augmentations...");
+    
+    // Matar todo excepto autopilot
     for (const proc of ns.ps('home')) {
         if (proc.filename !== 'autopilot.js') {
             ns.kill(proc.pid);
@@ -234,14 +222,12 @@ async function phaseInstall(ns, state) {
     
     await ns.sleep(3000);
     
-    ns.print("⬆️ Ejecutando ascend.js...");
-    const pid = ns.run('ascend.js', 1, '--auto');
-    
-    if (pid > 0) {
+    // Ejecutar ascend
+    if (ns.run('ascend.js', 1, '--auto')) {
         while (isScriptRunning(ns, 'ascend.js')) {
             await ns.sleep(1000);
         }
-        ns.print("✅ Instalación completa!");
+        ns.print("[INSTALL] ✓ Instalacion completa!");
         await ns.sleep(5000);
     }
     
