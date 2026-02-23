@@ -1,13 +1,13 @@
 /**
- * AUTOPILOT - Bitburner Automation
- * Version: 1.2
+ * AUTOPILOT - Bitburner Automation (Fork Independiente)
+ * Version: 2.0
  * 
  * Script principal que automatiza el juego desde cero.
  * Uso: run autopilot.js
  */
 
 const CONFIG = {
-    repoUrl: 'https://raw.githubusercontent.com/alainbryden/bitburner-scripts/main/',
+    repoUrl: 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/',
     casinoGoal: 10e9,
     minHackForFactions: 50,
     checkInterval: 10000,
