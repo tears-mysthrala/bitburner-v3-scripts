@@ -1,446 +1,454 @@
 /**
- * ZERO TO HERO - Complete Bitburner Automation
+ * ZERO TO HERO - Lite Edition (8GB RAM compatible)
  * 
- * Script que automatiza TODO el juego desde un save 100% nuevo.
- * 
- * Fases:
- * 1. STARTUP  - Configuración inicial
- * 2. CASINO   - Farmear dinero inicial ($10B)
- * 3. CRIME    - Subir stats y karma
- * 4. HACKING  - Infraestructura y hacking
- * 5. FACTIONS - Trabajar facciones
- * 6. AUGMENTS - Comprar augmentations  
- * 7. INSTALL  - Instalar augmentations
- * 8. DESTROY  - Destruir BitNode
+ * Versión ligera que NO importa helpers.js para poder correr
+ * en saves nuevos con poca RAM.
  * 
  * @param {NS} ns 
  */
 
-// Configuración de argumentos
-const argsSchema = [
-	['casino-goal', 10e9],
-	['min-hack-level', 50],
-	['install-at-aug-count', 6],
-	['install-at-aug-plus-nf', 10],
-	['auto-destroy', true],
-	['next-bn', 0],
-	['interval', 5000],
-	['no-tail', false],
-];
+const VERSION = "2.0-lite";
 
 // Fases
 const PHASE = {
-	STARTUP: 0,
-	CASINO: 1,
-	CRIME: 2,
+	INIT: 0,
+	DOWNLOAD: 1,
+	CASINO: 2,
 	HACKING: 3,
 	FACTIONS: 4,
 	AUGMENTS: 5,
 	INSTALL: 6,
 	DESTROY: 7,
-	COMPLETE: 8
+	DONE: 8
 };
 
-const PHASE_NAMES = ['STARTUP', 'CASINO', 'CRIME', 'HACKING', 'FACTIONS', 'AUGMENTS', 'INSTALL', 'DESTROY', 'COMPLETE'];
+const PHASE_NAMES = ['INIT', 'DOWNLOAD', 'CASINO', 'HACKING', 'FACTIONS', 'AUGMENTS', 'INSTALL', 'DESTROY', 'DONE'];
 
-// Estado global
-let options;
-let currentPhase = PHASE.STARTUP;
-let phaseStartTime = Date.now();
+// Estado
+let currentPhase = PHASE.INIT;
+let phaseStart = Date.now();
 let startTime = Date.now();
-let player;
-let resetInfo;
-let ownedSF = {};
-let installedAugsCache = [];
+let lastLog = "";
 
 /** @param {NS} ns **/
 export async function main(ns) {
-	// Parsear argumentos
-	options = ns.flags(argsSchema);
+	ns.disableLog('ALL');
+	ns.enableLog('print');
 	
-	// Verificar instancia única
-	const instances = ns.ps('home').filter(p => p.filename === ns.getScriptName() && p.pid !== ns.pid);
-	if (instances.length > 0) {
-		ns.tprint("ERROR: Ya hay una instancia de zero-to-hero corriendo");
-		return;
-	}
-
 	// Abrir ventana de log
-	if (!options['no-tail']) {
-		ns.tail();
-		// Posicionar ventana
-		await ns.sleep(100);
-		ns.ui.moveTail(50, 50);
-		ns.ui.resizeTail(1000, 600);
-	}
-
-	printBanner(ns, "🚀 ZERO TO HERO INICIADO");
-	log(ns, `Modo: ${options['auto-destroy'] ? 'AUTO-DESTROY' : 'MANUAL'}`, 'info');
+	ns.tail();
+	await ns.sleep(100);
+	ns.ui.moveTail(50, 50);
+	ns.ui.resizeTail(900, 500);
+	
+	banner(ns, `ZERO TO HERO v${VERSION}`);
+	log(ns, "Modo: Ultra-Lite (8GB RAM compatible)");
 	
 	// Loop principal
-	while (currentPhase !== PHASE.COMPLETE) {
+	while (currentPhase !== PHASE.DONE) {
 		try {
-			// Actualizar información
-			await updateInfo(ns);
+			const player = ns.getPlayer();
 			
-			// Ejecutar fase actual
 			switch (currentPhase) {
-				case PHASE.STARTUP:
-					await phaseStartup(ns);
+				case PHASE.INIT:
+					await phaseInit(ns, player);
+					break;
+				case PHASE.DOWNLOAD:
+					await phaseDownload(ns, player);
 					break;
 				case PHASE.CASINO:
-					await phaseCasino(ns);
-					break;
-				case PHASE.CRIME:
-					await phaseCrime(ns);
+					await phaseCasino(ns, player);
 					break;
 				case PHASE.HACKING:
-					await phaseHacking(ns);
+					await phaseHacking(ns, player);
 					break;
 				case PHASE.FACTIONS:
-					await phaseFactions(ns);
+					await phaseFactions(ns, player);
 					break;
 				case PHASE.AUGMENTS:
-					await phaseAugments(ns);
+					await phaseAugments(ns, player);
 					break;
 				case PHASE.INSTALL:
-					await phaseInstall(ns);
+					await phaseInstall(ns, player);
 					break;
 				case PHASE.DESTROY:
-					await phaseDestroy(ns);
+					await phaseDestroy(ns, player);
 					break;
 			}
-		} catch (err) {
-			log(ns, `⚠️ Error: ${String(err)}`, 'warning');
+		} catch (e) {
+			log(ns, `Error: ${e.message || e}`);
 		}
-
-		await ns.sleep(options['interval']);
+		
+		await ns.sleep(2000);
 	}
-
-	printBanner(ns, "🎉 ZERO TO HERO COMPLETADO");
+	
+	banner(ns, "ZERO TO HERO COMPLETADO");
 }
 
 // ============================================
 // FASES
 // ============================================
 
-async function phaseStartup(ns) {
-	logPhase(ns, "Configuración inicial");
-
-	// Verificar scripts base
-	const required = ['helpers.js', 'autopilot.js', 'daemon.js'];
-	const missing = required.filter(f => !ns.fileExists(f));
+async function phaseInit(ns, player) {
+	logPhase(ns, "Inicializando");
 	
-	if (missing.length > 0) {
-		log(ns, `Descargando scripts faltantes: ${missing.join(', ')}`, 'info');
-		
-		// Descargar git-pull si no existe
-		if (!ns.fileExists('git-pull.js')) {
-			const url = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/git-pull.js';
-			await ns.wget(url, 'git-pull.js');
-		}
-		
-		// Ejecutar git-pull
-		if (ns.fileExists('git-pull.js')) {
-			const pid = ns.run('git-pull.js');
-			if (pid > 0) {
-				log(ns, "Esperando descarga de scripts...", 'info');
-				await ns.sleep(15000);
+	// Mostrar info inicial
+	log(ns, `Dinero: ${fmtMoney(player.money)}`);
+	log(ns, `Hacking: ${player.skills.hacking}`);
+	log(ns, `Home RAM: ${ns.getServerMaxRam('home')}GB`);
+	
+	setPhase(PHASE.DOWNLOAD);
+}
+
+async function phaseDownload(ns, player) {
+	logPhase(ns, "Descargando scripts");
+	
+	const files = [
+		'git-pull.js', 'helpers.js', 'autopilot.js', 'daemon.js',
+		'casino.js', 'crime.js', 'ascend.js', 'faction-manager.js',
+		'work-for-factions.js', 'host-manager.js', 'hacknet-upgrade-manager.js',
+		'gangs.js', 'kill-all-scripts.js', 'cleanup.js', 'scan.js',
+		'sleeve.js', 'bladeburner.js', 'stockmaster.js', 'spend-hacknet-hashes.js'
+	];
+	
+	const baseUrl = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
+	let downloaded = 0;
+	
+	for (const file of files) {
+		if (!ns.fileExists(file)) {
+			const ok = await ns.wget(baseUrl + file + '?t=' + Date.now(), file);
+			if (ok) {
+				downloaded++;
+				ns.print(`  + ${file}`);
 			}
+			await ns.sleep(200);
 		}
 	}
-
-	// Si es save completamente nuevo, ir a casino
-	if (player.money < 1e6 && player.hacking < 20) {
-		log(ns, "Save nuevo detectado - Iniciando fase CASINO", 'info');
+	
+	log(ns, `Descargados: ${downloaded} archivos`);
+	
+	// Si tenemos los críticos, continuar
+	if (ns.fileExists('casino.js') && ns.fileExists('daemon.js')) {
+		await ns.sleep(1000);
 		setPhase(PHASE.CASINO);
-	} else {
-		setPhase(PHASE.HACKING);
 	}
 }
 
-async function phaseCasino(ns) {
-	logPhase(ns, `Farmeando $${formatMoney(options['casino-goal'])}`);
-
-	// Verificar objetivo
-	if (player.money >= options['casino-goal']) {
-		log(ns, `✅ Objetivo de casino alcanzado: ${formatMoney(player.money)}`, 'success');
-		
-		// Matar casino.js si sigue corriendo
+async function phaseCasino(ns, player) {
+	logPhase(ns, "Fase CASINO");
+	
+	const GOAL = 10e9; // $10B
+	
+	// Verificar si ya tenemos el dinero
+	if (player.money >= GOAL) {
+		log(ns, `✅ Objetivo alcanzado: ${fmtMoney(player.money)}`);
 		killScript(ns, 'casino.js');
-		
 		setPhase(PHASE.HACKING);
 		return;
 	}
-
-	// Verificar si podemos viajar a Aevum
-	const hasMoneyForTravel = player.money >= 200000;
 	
-	if (!hasMoneyForTravel) {
-		// Farmear dinero inicial
-		log(ns, `Farmeando $200k para viajar... (${formatMoney(player.money)})`, 'info');
-		await workOrCrime(ns);
+	// Necesitamos $200k para viajar a Aevum
+	if (player.money < 200000) {
+		log(ns, `Farmeando $200k para viajar... (${fmtMoney(player.money)})`);
+		
+		// Intentar trabajar
+		try {
+			if (ns.singularity.applyToCompany("Joe's Guns", "Employee")) {
+				ns.singularity.workForCompany("Joe's Guns", false);
+				return;
+			}
+		} catch {}
+		
+		// Si no hay trabajo, hacer crimen manualmente
+		if (!isRunning(ns, 'crime.js') && ns.fileExists('crime.js')) {
+			ns.run('crime.js');
+		}
 		return;
 	}
-
-	// Ejecutar casino
+	
+	// Tenemos dinero para viajar - iniciar casino
 	if (!isRunning(ns, 'casino.js')) {
-		log(ns, "🎰 Iniciando casino.js...", 'info');
+		log(ns, "🎰 Iniciando casino.js...");
 		
-		// Viajar a Aevum primero
+		// Viajar a Aevum
 		try {
-			await ns.singularity.travelToCity('Aevum');
+			ns.singularity.travelToCity('Aevum');
+			log(ns, "📍 Viajado a Aevum");
 		} catch {}
 		
 		ns.run('casino.js');
 	}
+	
+	log(ns, `Dinero actual: ${fmtMoney(player.money)} / ${fmtMoney(GOAL)}`);
 }
 
-async function phaseCrime(ns) {
-	logPhase(ns, "Subiendo stats (Karma)");
-
-	const karma = ns.heart.break();
-	const needKarma = player.bitNodeN === 2 || karma > -54000;
-
-	if (!needKarma || karma <= -54000) {
-		log(ns, `✅ Karma suficiente: ${formatNumber(karma)}`, 'success');
-		killScript(ns, 'crime.js');
-		setPhase(PHASE.HACKING);
-		return;
-	}
-
-	if (!isRunning(ns, 'crime.js')) {
-		log(ns, "🔫 Iniciando crime.js...", 'info');
-		ns.run('crime.js');
-	}
-}
-
-async function phaseHacking(ns) {
-	logPhase(ns, "Construyendo infraestructura");
-
+async function phaseHacking(ns, player) {
+	logPhase(ns, "Fase HACKING");
+	
+	// Matar casino si sigue corriendo
+	killScript(ns, 'casino.js');
+	
 	// Comprar TOR
 	if (!player.tor && player.money > 200000) {
 		try {
-			await ns.singularity.purchaseTor();
-			log(ns, "🔌 TOR comprado", 'success');
+			ns.singularity.purchaseTor();
+			log(ns, "🔌 TOR comprado");
 		} catch {}
 	}
-
-	// Comprar programas
-	await buyPrograms(ns);
-
-	// Mejorar home RAM
-	await upgradeHome(ns);
-
-	// Iniciar daemon
-	if (!isRunning(ns, 'daemon.js') && options['run-daemon'] !== false) {
-		log(ns, "👹 Iniciando daemon.js...", 'info');
-		const args = player.hacking > 8000 ? ['--high-hack-threshold', '8000'] : [];
-		ns.run('daemon.js', 1, ...args);
+	
+	// Comprar programas básicos
+	const programs = [
+		['BruteSSH.exe', 500000],
+		['FTPCrack.exe', 1500000]
+	];
+	
+	for (const [prog, cost] of programs) {
+		if (!ns.fileExists(prog) && player.money > cost * 2 && player.tor) {
+			try {
+				ns.singularity.purchaseProgram(prog);
+				log(ns, `📦 ${prog} comprado`);
+			} catch {}
+		}
 	}
-
+	
+	// Mejorar RAM de home
+	try {
+		const ram = ns.getServerMaxRam('home');
+		if (ram < 64) {
+			const cost = ns.singularity.getUpgradeHomeRamCost();
+			if (player.money > cost * 2) {
+				ns.singularity.upgradeHomeRam();
+				log(ns, `💾 RAM mejorada a ${ram * 2}GB`);
+			}
+		}
+	} catch {}
+	
+	// Iniciar daemon (el corazón del hacking)
+	if (!isRunning(ns, 'daemon.js')) {
+		log(ns, "👹 Iniciando daemon.js...");
+		
+		// Args para daemon según nuestra situación
+		const args = player.skills.hacking > 100 ? [] : ['--silent'];
+		const pid = ns.run('daemon.js', 1, ...args);
+		
+		if (pid > 0) {
+			log(ns, `✅ daemon.js iniciado (PID: ${pid})`);
+		}
+	}
+	
 	// Iniciar host-manager para servidores cloud
-	if (!isRunning(ns, 'host-manager.js')) {
-		ns.run('host-manager.js', 1, '--max-spend', '0.5');
+	if (!isRunning(ns, 'host-manager.js') && ns.fileExists('host-manager.js')) {
+		ns.run('host-manager.js', 1, '--max-spend', '0.3');
 	}
-
+	
 	// Iniciar hacknet
 	if (!isRunning(ns, 'hacknet-upgrade-manager.js')) {
 		ns.run('hacknet-upgrade-manager.js');
 	}
-
-	// Verificar si debemos pasar a facciones
-	const timeInPhase = Date.now() - phaseStartTime;
-	if (player.hacking >= options['min-hack-level'] || timeInPhase > 300000) {
+	
+	// Verificar si pasamos a facciones
+	if (player.skills.hacking >= 50 || player.money > 100000000) {
+		await ns.sleep(5000);
 		setPhase(PHASE.FACTIONS);
 	}
 }
 
-async function phaseFactions(ns) {
-	logPhase(ns, "Trabajando con facciones");
-
-	// Unirse a facciones disponibles
-	await joinFactions(ns);
-
+async function phaseFactions(ns, player) {
+	logPhase(ns, "Fase FACTIONS");
+	
+	// Intentar unirse a facciones
+	const factions = ['CyberSec', 'Netburners', 'Sector-12', 'Iron-Gym', 'The Black Hand'];
+	
+	try {
+		const invites = ns.singularity.checkFactionInvitations();
+		for (const fac of factions) {
+			if (invites.includes(fac)) {
+				ns.singularity.joinFaction(fac);
+				log(ns, `🎉 Unido a: ${fac}`);
+			}
+		}
+	} catch {}
+	
 	// Iniciar work-for-factions
 	if (!isRunning(ns, 'work-for-factions.js')) {
-		log(ns, "💼 Iniciando work-for-factions.js...", 'info');
+		log(ns, "💼 Iniciando work-for-factions.js...");
 		ns.run('work-for-factions.js');
 	}
-
-	// Iniciar gangs si es BN2 o tenemos SF2
-	if (ownedSF[2] >= 1 || player.bitNodeN === 2) {
+	
+	// Intentar gangs si tenemos karma
+	try {
 		const karma = ns.heart.break();
-		if (karma <= -54000 && !isRunning(ns, 'gangs.js')) {
-			log(ns, "👥 Iniciando gangs.js...", 'info');
+		if (karma <= -54000 && !isRunning(ns, 'gangs.js') && ns.fileExists('gangs.js')) {
+			log(ns, "👥 Iniciando gangs.js...");
 			ns.run('gangs.js');
 		}
-	}
-
-	// Iniciar bladeburner si es BN6/7 o tenemos SF7
-	if ((player.bitNodeN === 6 || player.bitNodeN === 7 || ownedSF[7] >= 1) && !isRunning(ns, 'bladeburner.js')) {
-		if (!isRunning(ns, 'bladeburner.js')) {
-			ns.run('bladeburner.js');
+	} catch {}
+	
+	// Verificar si podemos comprar augmentations
+	let canBuyAugs = false;
+	try {
+		const owned = ns.singularity.getOwnedAugmentations(true);
+		const base = ns.singularity.getOwnedAugmentations(false);
+		const newAugs = owned.length - base.length;
+		
+		if (newAugs >= 6 || owned.length >= 10) {
+			canBuyAugs = true;
 		}
+	} catch {}
+	
+	if (canBuyAugs || player.money > 10000000000) {
+		setPhase(PHASE.AUGMENTS);
 	}
-
-	// Iniciar sleeves si tenemos SF10
-	if (ownedSF[10] >= 1 && !isRunning(ns, 'sleeve.js')) {
-		ns.run('sleeve.js');
-	}
-
-	// Iniciar stocks si tenemos acceso
-	if (player.money > 50e9 && !isRunning(ns, 'stockmaster.js')) {
-		if (await hasStockAccess(ns)) {
-			ns.run('stockmaster.js');
-		}
-	}
-
-	// Verificar augmentations disponibles
-	await checkAugmentations(ns);
 }
 
-async function phaseAugments(ns) {
-	logPhase(ns, "Comprando augmentations");
-
+async function phaseAugments(ns, player) {
+	logPhase(ns, "Fase AUGMENTS");
+	
 	// Ejecutar faction-manager para comprar
 	if (!isRunning(ns, 'faction-manager.js')) {
-		log(ns, "🛒 Comprando augmentations...", 'info');
-		ns.run('faction-manager.js', 1, '--purchase', '--allow-reserve-debt');
+		log(ns, "🛒 Comprando augmentations...");
+		ns.run('faction-manager.js', 1, '--purchase');
 		await ns.sleep(10000);
 	}
-
+	
 	// Verificar si debemos instalar
-	const shouldInstall = await shouldInstallNow(ns);
+	let shouldInstall = false;
+	try {
+		const owned = ns.singularity.getOwnedAugmentations(true);
+		const base = ns.singularity.getOwnedAugmentations(false);
+		const newAugs = owned.filter(a => !base.includes(a));
+		
+		// Contar NF como 1
+		const nfCount = newAugs.filter(a => a.includes('NeuroFlux')).length;
+		const uniqueAugs = newAugs.length - nfCount + (nfCount > 0 ? 1 : 0);
+		
+		if (uniqueAugs >= 6 || newAugs.includes('The Red Pill')) {
+			shouldInstall = true;
+		}
+		
+		log(ns, `Augmentations nuevas: ${newAugs.length} (instalar con ${uniqueAugs} unicas)`);
+	} catch {}
+	
 	if (shouldInstall) {
 		setPhase(PHASE.INSTALL);
 	}
 }
 
-async function phaseInstall(ns) {
-	logPhase(ns, "Instalando augmentations");
-
-	// Guardar lista de augs antes de instalar
-	installedAugsCache = await ns.singularity.getOwnedAugmentations(true);
-
+async function phaseInstall(ns, player) {
+	logPhase(ns, "Fase INSTALL");
+	
 	// Matar scripts
 	killScript(ns, 'daemon.js');
 	killScript(ns, 'faction-manager.js');
 	killScript(ns, 'work-for-factions.js');
+	killScript(ns, 'host-manager.js');
 	
 	await ns.sleep(2000);
-
+	
 	// Usar ascend.js
-	log(ns, "⬆️ Ejecutando ascend.js...", 'info');
+	log(ns, "⬆️ Ejecutando ascend.js --auto...");
 	const pid = ns.run('ascend.js', 1, '--auto');
 	
 	if (pid > 0) {
-		// Esperar a que termine (ascend.js se cierra después de instalar)
+		log(ns, "Esperando instalacion...");
+		
+		// Esperar a que termine
 		while (isRunning(ns, 'ascend.js')) {
 			await ns.sleep(1000);
 		}
 		
-		log(ns, "✅ Instalación completada", 'success');
+		log(ns, "✅ Instalacion completada!");
 		await ns.sleep(5000);
 		
 		// Volver a hacking
 		setPhase(PHASE.HACKING);
-	} else {
-		log(ns, "❌ Error al ejecutar ascend.js", 'error');
 	}
 }
 
-async function phaseDestroy(ns) {
-	logPhase(ns, "Destruyendo BitNode");
-
+async function phaseDestroy(ns, player) {
+	logPhase(ns, "Fase DESTROY");
+	
 	// Verificar The Red Pill
-	const owned = await ns.singularity.getOwnedAugmentations();
-	const hasTRP = owned.includes('The Red Pill');
-
+	let hasTRP = false;
+	let hasWDAccess = false;
+	
+	try {
+		const owned = ns.singularity.getOwnedAugmentations();
+		hasTRP = owned.includes('The Red Pill');
+		
+		if (hasTRP) {
+			// Verificar si podemos hackear WD
+			const wdLevel = ns.getServerRequiredHackingLevel('w0r1d_d43m0n');
+			hasWDAccess = player.skills.hacking >= wdLevel;
+			
+			log(ns, `The Red Pill: ✅ | WD Hack: ${player.skills.hacking}/${wdLevel}`);
+		}
+	} catch {}
+	
 	if (!hasTRP) {
-		log(ns, "❌ No tienes 'The Red Pill'", 'warning');
+		log(ns, "❌ No tienes The Red Pill, volviendo a FACTIONS...");
 		setPhase(PHASE.FACTIONS);
 		return;
 	}
-
-	// Verificar nivel de hacking para WD
-	const wdLevel = ns.getServerRequiredHackingLevel('w0r1d_d43m0n');
-	if (player.hacking < wdLevel) {
-		log(ns, `💻 Subiendo hacking: ${player.hacking}/${wdLevel}`, 'info');
+	
+	if (!hasWDAccess) {
+		log(ns, "💻 Subiendo hacking para World Daemon...");
 		setPhase(PHASE.HACKING);
 		return;
 	}
-
-	// Destruir BitNode
-	printBanner(ns, "💥 DESTRUYENDO BITNODE");
 	
-	if (options['auto-destroy']) {
-		const nextBN = options['next-bn'] || getNextBitNode();
+	// Destruir BitNode
+	banner(ns, "DESTRUYENDO BITNODE!");
+	
+	try {
+		// Elegir siguiente BN (priorizar BN4 para Singularity)
+		const nextBN = 4; // Siempre ir a BN4 primero si es posible
 		
-		try {
-			await ns.singularity.destroyW0r1dD43m0n(nextBN);
-			log(ns, `✅ BitNode ${player.bitNodeN} destruido!`, 'success');
-			
-			// Esperar a que cargue el nuevo BN
-			await ns.sleep(10000);
-			
-			// Reiniciar ciclo
-			setPhase(PHASE.STARTUP);
-		} catch (err) {
-			log(ns, `❌ Error al destruir: ${err}`, 'error');
-		}
-	} else {
-		log(ns, "Modo manual: Destruye el BitNode manualmente", 'warning');
-		setPhase(PHASE.COMPLETE);
+		ns.singularity.destroyW0r1dD43m0n(nextBN);
+		log(ns, `💥 BitNode destruido! Siguiente: BN${nextBN}`);
+		
+		await ns.sleep(10000);
+		setPhase(PHASE.HACKING);
+		
+	} catch (e) {
+		log(ns, `Error al destruir: ${e.message || e}`);
+		setPhase(PHASE.HACKING);
 	}
 }
 
 // ============================================
-// FUNCIONES AUXILIARES
+// UTILIDADES
 // ============================================
-
-async function updateInfo(ns) {
-	player = ns.getPlayer();
-	resetInfo = ns.getResetInfo();
-	
-	// Detectar Source Files
-	try {
-		for (let i = 1; i <= 14; i++) {
-			const level = ns.singularity.getOwnedSourceFiles().find(sf => sf.n === i)?.lvl || 0;
-			if (level > 0) ownedSF[i] = level;
-		}
-	} catch {}
-}
 
 function setPhase(newPhase) {
 	if (currentPhase !== newPhase) {
 		currentPhase = newPhase;
-		phaseStartTime = Date.now();
+		phaseStart = Date.now();
 	}
 }
 
 function logPhase(ns, desc) {
-	const elapsed = formatDuration(Date.now() - phaseStartTime);
-	const total = formatDuration(Date.now() - startTime);
-	ns.print(`\n[${PHASE_NAMES[currentPhase]} | ⏱️ ${elapsed} | Total: ${total}] ${desc}`);
-}
-
-function log(ns, msg, level = 'info') {
-	const prefix = {
-		'info': 'ℹ️',
-		'success': '✅',
-		'warning': '⚠️',
-		'error': '❌'
-	}[level] || '•';
+	const elapsed = fmtTime(Date.now() - phaseStart);
+	const total = fmtTime(Date.now() - startTime);
+	const msg = `[${PHASE_NAMES[currentPhase]} | ${elapsed}] ${desc}`;
 	
-	ns.print(`${prefix} ${msg}`);
+	if (msg !== lastLog) {
+		ns.print(msg);
+		lastLog = msg;
+	}
 }
 
-function printBanner(ns, title) {
-	const line = '═'.repeat(50);
-	ns.print(`\n╔${line}╗`);
-	ns.print(`║${title.padStart(25 + title.length/2).padEnd(50)}║`);
-	ns.print(`╚${line}╝`);
+function log(ns, msg) {
+	ns.print(`  → ${msg}`);
+}
+
+function banner(ns, text) {
+	const line = "=".repeat(50);
+	ns.print("");
+	ns.print(line);
+	ns.print(text);
+	ns.print(line);
+	ns.print("");
 }
 
 function isRunning(ns, script) {
@@ -448,187 +456,26 @@ function isRunning(ns, script) {
 }
 
 function killScript(ns, script) {
-	const procs = ns.ps('home').filter(p => p.filename === script);
-	for (const p of procs) {
-		ns.kill(p.pid);
-	}
-}
-
-async function workOrCrime(ns) {
-	// Intentar trabajar en compañía
-	const companies = ['Joe\'s Guns', 'Max Hardware', 'Alpha Enterprises'];
-	const jobs = ['Training', 'IT Intern', 'Software Engineering Intern', 'Employee'];
-	
-	for (const company of companies) {
-		for (const job of jobs) {
-			try {
-				if (await ns.singularity.applyToCompany(company, job)) {
-					await ns.singularity.workForCompany(company, false);
-					return;
-				}
-			} catch {}
-		}
-	}
-	
-	// Si no hay trabajo, crimen
-	if (!isRunning(ns, 'crime.js')) {
-		ns.run('crime.js');
-	}
-}
-
-async function buyPrograms(ns) {
-	if (!player.tor) return;
-	
-	const programs = [
-		{ name: 'BruteSSH.exe', cost: 500000 },
-		{ name: 'FTPCrack.exe', cost: 1500000 },
-		{ name: 'relaySMTP.exe', cost: 5000000 },
-		{ name: 'HTTPWorm.exe', cost: 30000000 },
-		{ name: 'SQLInject.exe', cost: 250000000 }
-	];
-
-	for (const prog of programs) {
-		if (!ns.fileExists(prog.name, 'home') && player.money >= prog.cost * 1.5) {
-			try {
-				await ns.singularity.purchaseProgram(prog.name);
-				log(ns, `📦 Comprado: ${prog.name}`, 'success');
-				await ns.sleep(500);
-			} catch {}
+	for (const p of ns.ps('home')) {
+		if (p.filename === script) {
+			ns.kill(p.pid);
 		}
 	}
 }
 
-async function upgradeHome(ns) {
-	try {
-		const ram = ns.getServerMaxRam('home');
-		if (ram < 64) {
-			const cost = await ns.singularity.getUpgradeHomeRamCost();
-			if (player.money >= cost * 2) {
-				await ns.singularity.upgradeHomeRam();
-				log(ns, `💾 RAM mejorada a ${ram * 2}GB`, 'success');
-			}
-		}
-	} catch {}
+function fmtMoney(n) {
+	if (n >= 1e12) return (n/1e12).toFixed(2) + 't';
+	if (n >= 1e9) return (n/1e9).toFixed(2) + 'b';
+	if (n >= 1e6) return (n/1e6).toFixed(2) + 'm';
+	if (n >= 1e3) return (n/1e3).toFixed(2) + 'k';
+	return '$' + Math.floor(n);
 }
 
-async function joinFactions(ns) {
-	const priorities = [
-		'CyberSec', 'Netburners', 'Sector-12', 'Iron-Gym',
-		'The Black Hand', 'NiteSec', 'Tian Di Hui', 
-		'Volhaven', 'Chongqing', 'New Tokyo', 'Ishima',
-		'Daedalus', 'Illuminati', 'The Covenant'
-	];
-	
-	try {
-		const invitations = ns.singularity.checkFactionInvitations();
-		
-		for (const faction of priorities) {
-			if (invitations.includes(faction)) {
-				await ns.singularity.joinFaction(faction);
-				log(ns, `🎉 Unido a: ${faction}`, 'success');
-				await ns.sleep(500);
-			}
-		}
-	} catch {}
-}
-
-async function checkAugmentations(ns) {
-	try {
-		// Contar augmentations que podemos comprar
-		const owned = await ns.singularity.getOwnedAugmentations(true);
-		const factions = ns.getPlayer().factions || [];
-		let affordable = 0;
-		
-		for (const faction of factions) {
-			const augs = await ns.singularity.getAugmentationsFromFaction(faction);
-			for (const aug of augs) {
-				if (owned.includes(aug)) continue;
-				
-				const price = await ns.singularity.getAugmentationPrice(aug);
-				const rep = await ns.singularity.getAugmentationRepReq(aug);
-				const factionRep = await ns.singularity.getFactionRep(faction);
-				
-				if (player.money >= price && factionRep >= rep) {
-					affordable++;
-				}
-			}
-		}
-		
-		if (affordable >= options['install-at-aug-count']) {
-			setPhase(PHASE.AUGMENTS);
-		}
-	} catch {}
-}
-
-async function shouldInstallNow(ns) {
-	try {
-		const owned = await ns.singularity.getOwnedAugmentations(true);
-		const base = await ns.singularity.getOwnedAugmentations(false);
-		const newAugs = owned.filter(a => !base.includes(a));
-		
-		// Contar NF como 1
-		const nfLevels = newAugs.filter(a => a.includes('NeuroFlux')).length;
-		const uniqueAugs = newAugs.length - nfLevels + (nfLevels > 0 ? 1 : 0);
-		
-		if (uniqueAugs >= options['install-at-aug-count']) {
-			return true;
-		}
-		
-		if (owned.length >= options['install-at-aug-plus-nf']) {
-			return true;
-		}
-		
-		// Si tenemos The Red Pill, instalar para poder usarlo
-		if (newAugs.includes('The Red Pill')) {
-			return true;
-		}
-		
-		return false;
-	} catch {
-		return false;
-	}
-}
-
-async function hasStockAccess(ns) {
-	try {
-		return await ns.stock.hasWSEAccount() && await ns.stock.hasTIXAPIAccess();
-	} catch {
-		return false;
-	}
-}
-
-function getNextBitNode() {
-	// Orden óptimo de BitNodes
-	const order = [4, 1, 5, 2, 10, 8, 13, 7, 9, 14, 11, 3, 6, 12];
-	
-	for (const bn of order) {
-		if (!ownedSF[bn] || ownedSF[bn] < 3) {
-			return bn;
-		}
-	}
-	
-	return 12; // Por defecto, seguir en BN12
-}
-
-// Formatters
-function formatMoney(n) {
-	if (n >= 1e12) return (n / 1e12).toFixed(2) + 't';
-	if (n >= 1e9) return (n / 1e9).toFixed(2) + 'b';
-	if (n >= 1e6) return (n / 1e6).toFixed(2) + 'm';
-	if (n >= 1e3) return (n / 1e3).toFixed(2) + 'k';
-	return n.toString();
-}
-
-function formatNumber(n) {
-	return n.toLocaleString();
-}
-
-function formatDuration(ms) {
-	const seconds = Math.floor(ms / 1000);
-	const minutes = Math.floor(seconds / 60);
-	const hours = Math.floor(minutes / 60);
-	
-	if (hours > 0) return `${hours}h ${minutes % 60}m`;
-	if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-	return `${seconds}s`;
+function fmtTime(ms) {
+	const s = Math.floor(ms / 1000);
+	const m = Math.floor(s / 60);
+	const h = Math.floor(m / 60);
+	if (h > 0) return `${h}h${m%60}m`;
+	if (m > 0) return `${m}m${s%60}s`;
+	return `${s}s`;
 }

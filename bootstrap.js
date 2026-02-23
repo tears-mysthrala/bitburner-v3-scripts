@@ -1,117 +1,163 @@
 /**
- * BOOTSTRAP - Primer script a ejecutar en save nuevo
+ * BOOTSTRAP - Ultra Lite Edition (8GB RAM compatible)
  * 
- * Este script se ejecuta manualmente en un save completamente nuevo:
- * 1. Descarga git-pull.js
- * 2. Descarga todos los scripts del repo
- * 3. Inicia zero-to-hero.js automáticamente
+ * Primer script a ejecutar en save nuevo.
+ * Descarga todo e inicia zero-to-hero.js
  * 
- * CÓMO USAR EN SAVE NUEVO:
+ * CÓMO USAR:
  * 1. nano bootstrap.js
- * 2. Copiar este contenido
+ * 2. Copiar este contenido  
  * 3. run bootstrap.js
+ * 
+ * @param {NS} ns 
  */
 
 /** @param {NS} ns **/
 export async function main(ns) {
-	ns.tprint("╔════════════════════════════════════════════════════════╗");
-	ns.tprint("║     🚀 ZERO TO HERO - Bootstrap inicial                ║");
-	ns.tprint("║     Descargando scripts y iniciando automatización...  ║");
-	ns.tprint("╚════════════════════════════════════════════════════════╝");
+	ns.disableLog('ALL');
+	ns.clearLog();
+	
+	ns.print("╔════════════════════════════════════════════════════════╗");
+	ns.print("║     🚀 ZERO TO HERO - Bootstrap                        ║");
+	ns.print("║     Descargando scripts...                             ║");
+	ns.print("╚════════════════════════════════════════════════════════╝");
+	ns.print("");
 
 	const baseUrl = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
-	const filesToDownload = [
-		'git-pull.js',
-		'helpers.js',
+	
+	// Lista priorizada (los más importantes primero)
+	const files = [
+		// Críticos - primero
 		'zero-to-hero.js',
+		'casino.js',
+		'crime.js', 
+		'kill-all-scripts.js',
+		
+		// Core
+		'helpers.js',
 		'autopilot.js',
 		'daemon.js',
-		'casino.js',
-		'crime.js',
 		'ascend.js',
+		
+		// Factions
 		'faction-manager.js',
 		'work-for-factions.js',
+		
+		// Infraestructura
 		'host-manager.js',
 		'hacknet-upgrade-manager.js',
+		'spend-hacknet-hashes.js',
+		
+		// Features extra
 		'gangs.js',
 		'sleeve.js',
 		'bladeburner.js',
-		'scan.js',
 		'stockmaster.js',
-		'spend-hacknet-hashes.js',
-		'go.js',
-		'kill-all-scripts.js',
-		'cleanup.js',
 		'stanek.js',
 		'optimize-stanek.js',
-		'reserve.js',
+		'go.js',
+		
+		// Utilidades
+		'cleanup.js',
+		'scan.js',
 		'analyze-hack.js',
-		'run-command.js',
+		'reserve.js',
+		'stats.js',
 		'grep.js',
+		'run-command.js',
 		'dump-ns-namespace.js',
-		'git-pull.js',
+		'farm-intelligence.js',
+		'dev-console.js',
+		
+		// Git pull también
+		'git-pull.js'
 	];
 
-	ns.tprint("📥 Descargando scripts base...");
-	
 	let downloaded = 0;
 	let failed = [];
 	
-	for (const file of filesToDownload) {
-		const url = baseUrl + file;
-		const success = await ns.wget(url + '?t=' + Date.now(), file);
+	ns.print(`📥 Descargando ${files.length} archivos...`);
+	ns.print("");
+	
+	for (const file of files) {
+		// Verificar si ya existe
+		if (ns.fileExists(file)) {
+			ns.print(`  ✓ ${file} (ya existe)`);
+			downloaded++;
+			continue;
+		}
+		
+		// Intentar descargar
+		const url = baseUrl + file + '?t=' + Date.now();
+		const success = await ns.wget(url, file);
 		
 		if (success) {
+			ns.print(`  ✅ ${file}`);
 			downloaded++;
-			ns.print(`✅ ${file}`);
 		} else {
+			ns.print(`  ❌ ${file}`);
 			failed.push(file);
-			ns.print(`❌ ${file}`);
 		}
 		
-		// Pequeña pausa para no saturar
-		await ns.sleep(100);
+		// Pausa para no saturar
+		await ns.sleep(150);
 	}
-
-	ns.tprint(`\n📊 Descarga completa: ${downloaded}/${filesToDownload.length} archivos`);
+	
+	ns.print("");	
+	ns.print(`📊 Resultado: ${downloaded}/${files.length} archivos descargados`);
 	
 	if (failed.length > 0) {
-		ns.tprint(`⚠️ Archivos fallidos: ${failed.join(', ')}`);
-		ns.tprint("Intentando descarga alternativa con git-pull.js...");
-		
-		// Intentar usar git-pull.js si existe
-		if (ns.fileExists('git-pull.js')) {
-			ns.run('git-pull.js');
-			await ns.sleep(10000);
-		}
+		ns.print(`⚠️ Fallidos: ${failed.length} archivos`);
+		ns.print("  " + failed.join(", "));
 	}
-
-	// Verificar que tenemos los scripts críticos
-	const criticalFiles = ['helpers.js', 'zero-to-hero.js', 'autopilot.js', 'daemon.js'];
-	const missing = criticalFiles.filter(f => !ns.fileExists(f));
+	
+	// Verificar archivos críticos
+	const critical = ['zero-to-hero.js', 'casino.js', 'daemon.js'];
+	const missing = critical.filter(f => !ns.fileExists(f));
 	
 	if (missing.length > 0) {
-		ns.tprint(`❌ ERROR: Faltan archivos críticos: ${missing.join(', ')}`);
-		ns.tprint("Intenta ejecutar: run git-pull.js");
+		ns.print("");
+		ns.print("❌ ERROR: Faltan archivos críticos:");
+		for (const f of missing) ns.print(`   - ${f}`);
+		ns.print("");
+		ns.print("Intenta ejecutar de nuevo: run bootstrap.js");
 		return;
 	}
-
-	ns.tprint("\n🎉 ¡Scripts descargados correctamente!");
-	ns.tprint("\n═══════════════════════════════════════════════════════");
-	ns.tprint("  INICIANDO ZERO TO HERO en 3 segundos...");
-	ns.tprint("  Este script automatizará TODO el juego desde cero.");
-	ns.tprint("═══════════════════════════════════════════════════════\n");
+	
+	ns.print("");
+	ns.print("🎉 ¡Todos los scripts descargados!");
+	ns.print("");
+	ns.print("════════════════════════════════════════════════════════");
+	ns.print("  Iniciando ZERO TO HERO en 3 segundos...");
+	ns.print("  Este script automatizará TODO el juego.");
+	ns.print("════════════════════════════════════════════════════════");
+	ns.print("");
+	ns.print("💡 Tip: Abre el log con 'tail zero-to-hero.js'");
+	ns.print("");
 	
 	await ns.sleep(3000);
 	
 	// Iniciar zero-to-hero
-	const pid = ns.run('zero-to-hero.js', 1);
+	const pid = ns.run('zero-to-hero.js');
 	
 	if (pid > 0) {
-		ns.tprint(`✅ zero-to-hero.js iniciado (PID: ${pid})`);
-		ns.tprint("📋 Abre la ventana de log: tail zero-to-hero.js");
+		ns.print(`✅ zero-to-hero.js iniciado (PID: ${pid})`);
+		ns.print("📋 Escribe: tail zero-to-hero.js");
 	} else {
-		ns.tprint("❌ Error al iniciar zero-to-hero.js");
-		ns.tprint("Intenta manualmente: run zero-to-hero.js");
+		ns.print("❌ Error al iniciar zero-to-hero.js");
+		ns.print("Intenta manualmente: run zero-to-hero.js");
+		
+		// Diagnóstico
+		const ram = ns.getServerMaxRam('home');
+		const used = ns.getServerUsedRam('home');
+		const avail = ram - used;
+		ns.print(`RAM: ${used}GB / ${ram}GB usado (${avail}GB libre)`);
+		
+		// Intentar con run con 1 thread explícito
+		ns.print("Intentando con thread=1...");
+		const pid2 = ns.run('zero-to-hero.js', 1);
+		if (pid2 > 0) {
+			ns.print(`✅ Iniciado con PID: ${pid2}`);
+		}
 	}
 }

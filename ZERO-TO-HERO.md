@@ -2,6 +2,9 @@
 
 Sistema de automatización total para Bitburner desde un save 100% nuevo.
 
+> **✨ Versión Ultra-Lite: Compatible con 8GB RAM**  
+> No requiere `helpers.js` para funcionar. Puede ejecutarse desde el inicio del juego.
+
 ---
 
 ## 📁 Archivos
