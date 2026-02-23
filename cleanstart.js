@@ -89,8 +89,8 @@ export async function main(ns) {
 	
 	// Scripts esenciales en orden
 	const essential = [
-		'begin.js',            // <-- ULTRA-lite launcher
-		'auto.js',
+		'zzz.js',              // <-- SUPER ULTRA-lite launcher
+		'begin.js',
 		'daemon.js',
 		'helpers.js',
 		'autopilot.js',
@@ -151,9 +151,10 @@ export async function main(ns) {
 	ns.print("  🚀 Limpieza completa!");
 	ns.print("");
 	
-	// Iniciar el launcher principal (prioridad: begin.js > auto.js > run.js)
+	// Iniciar el launcher principal (prioridad: zzz.js > begin.js > auto.js > run.js)
 	let launcher = 'run.js';
-	if (ns.fileExists('begin.js')) launcher = 'begin.js';
+	if (ns.fileExists('zzz.js')) launcher = 'zzz.js';
+	else if (ns.fileExists('begin.js')) launcher = 'begin.js';
 	else if (ns.fileExists('auto.js')) launcher = 'auto.js';
 	
 	ns.print(`  Iniciando ${launcher}...`);
