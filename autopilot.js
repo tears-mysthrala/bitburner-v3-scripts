@@ -1,6 +1,6 @@
 /**
  * AUTOPILOT - Bitburner Automation
- * Version: 1.1
+ * Version: 1.2
  * 
  * Script principal que automatiza el juego desde cero.
  * Uso: run autopilot.js
@@ -8,9 +8,9 @@
 
 const CONFIG = {
     repoUrl: 'https://raw.githubusercontent.com/alainbryden/bitburner-scripts/main/',
-    casinoGoal: 10e9,  // $10B
+    casinoGoal: 10e9,
     minHackForFactions: 50,
-    checkInterval: 10000,  // 10 segundos
+    checkInterval: 10000,
 };
 
 const PHASES = {
@@ -30,7 +30,7 @@ export async function main(ns) {
     let state = loadState(ns);
     
     ns.print("╔════════════════════════════════════════════════════╗");
-    ns.print("║        AUTOPILOT v1.0 - Bitburner Automation       ║");
+    ns.print("║        AUTOPILOT v1.2 - Bitburner Automation       ║");
     ns.print("╚════════════════════════════════════════════════════╝");
     ns.print("");
     
@@ -40,7 +40,6 @@ export async function main(ns) {
             const money = player.money;
             const hackLevel = player.skills.hacking;
             
-            // Log de estado
             if (Date.now() % 30000 < 1000) {
                 ns.print(`[${getPhaseName(state.phase)}] $${formatMoney(money)} | Hack: ${hackLevel}`);
             }
@@ -81,35 +80,35 @@ export async function main(ns) {
 // ============================================
 
 async function phaseDownload(ns, state) {
-    ns.print("📥 Fase DOWNLOAD: Descargando scripts...");
+    ns.print("📥 Fase DOWNLOAD: Descargando repo completo...");
     
-    const essentialFiles = [
-        'helpers.js',
-        'casino.js', 
-        'daemon.js',
-        'ascend.js',
-        'kill-all-scripts.js',
-        '/Tasks/crack-host.js',
-        '/Tasks/grow-host.js',
-        '/Tasks/hack-host.js',
-        '/Tasks/weaken-host.js'
-    ];
+    // Descargar git-pull.js primero
+    ns.print("Descargando git-pull.js...");
+    await ns.wget(CONFIG.repoUrl + 'git-pull.js?t=' + Date.now(), 'git-pull.js');
     
-    let downloaded = 0;
-    for (const file of essentialFiles) {
-        if (!ns.fileExists(file)) {
-            const success = await ns.wget(CONFIG.repoUrl + file + '?t=' + Date.now(), file);
-            if (success) {
-                downloaded++;
-                ns.print(`  ✓ ${file}`);
-            } else {
-                ns.print(`  ✗ ${file} (fallo)`);
+    if (!ns.fileExists('git-pull.js')) {
+        ns.print("✗ Error descargando git-pull.js");
+        // Fallback: descargar manualmente los esenciales
+        await downloadEssential(ns);
+    } else {
+        ns.print("✓ git-pull.js descargado");
+        ns.print("Ejecutando git-pull.js para descargar TODO el repo...");
+        
+        // Ejecutar git-pull.js
+        const pid = ns.run('git-pull.js');
+        if (pid > 0) {
+            // Esperar a que termine (max 60 segundos)
+            let attempts = 0;
+            while (ns.isRunning(pid) && attempts < 60) {
+                await ns.sleep(1000);
+                attempts++;
             }
-            await ns.sleep(100);
+            ns.print("✓ git-pull.js completado");
+        } else {
+            ns.print("✗ No se pudo ejecutar git-pull.js, usando fallback");
+            await downloadEssential(ns);
         }
     }
-    
-    ns.print(`Descarga completa: ${downloaded} archivos nuevos`);
     
     // Decidir siguiente fase
     const money = ns.getPlayer().money;
@@ -122,6 +121,43 @@ async function phaseDownload(ns, state) {
     }
 }
 
+async function downloadEssential(ns) {
+    ns.print("Descargando archivos esenciales (fallback)...");
+    
+    // Lista completa de archivos importantes
+    const files = [
+        // Core
+        'helpers.js', 'casino.js', 'daemon.js', 'ascend.js', 'kill-all-scripts.js',
+        // Analysis
+        'analyze-hack.js', 'stats.js', 'scan.js',
+        // Factions
+        'work-for-factions.js', 'faction-manager.js',
+        // Money
+        'stockmaster.js', 'hacknet-upgrade-manager.js',
+        // Features
+        'host-manager.js', 'sleeve.js', 'bladeburner.js', 'gangs.js', 'go.js',
+        // Utils
+        'cleanup.js', 'reserve.js', 'grep.js', 'run-command.js',
+        // Tasks (en subcarpeta)
+        '/Tasks/crack-host.js', '/Tasks/grow-host.js', '/Tasks/hack-host.js', 
+        '/Tasks/weaken-host.js', '/Tasks/contractor.js'
+    ];
+    
+    let ok = 0, fail = 0;
+    for (const file of files) {
+        if (!ns.fileExists(file)) {
+            const success = await ns.wget(CONFIG.repoUrl + file + '?t=' + Date.now(), file);
+            if (success) ok++; else fail++;
+            if (fail === 0 || ok % 5 === 0) {
+                ns.print(`  Progreso: ${ok} OK, ${fail} FAIL`);
+            }
+            await ns.sleep(50);
+        }
+    }
+    
+    ns.print(`✓ Descarga completa: ${ok} archivos nuevos, ${fail} fallos`);
+}
+
 async function phaseEarly(ns, state, money) {
     if (money >= 200000) {
         ns.print("✅ Early complete! Tenemos $200k");
@@ -131,27 +167,22 @@ async function phaseEarly(ns, state, money) {
     
     ns.print(`💰 Farmeando... $${formatMoney(money)} / $200k`);
     
-    // Intentar hackear n00dles
     try {
         const earned = await ns.hack('n00dles');
         if (earned > 0) {
             ns.print(`  +$${formatMoney(earned)} de n00dles`);
         }
-    } catch (e) {
-        // Si falla, esperar
-    }
+    } catch (e) {}
 }
 
 async function phaseCasino(ns, state, money) {
     if (money >= CONFIG.casinoGoal) {
         ns.print("✅ Casino complete! Tenemos $10B");
-        // Matar casino si sigue corriendo
         killScript(ns, 'casino.js');
         state.phase = PHASES.HACKING;
         return;
     }
     
-    // Verificar si casino.js está corriendo
     if (!isScriptRunning(ns, 'casino.js')) {
         ns.print("🎰 Iniciando casino.js...");
         ns.run('casino.js');
@@ -161,7 +192,6 @@ async function phaseCasino(ns, state, money) {
 }
 
 async function phaseHacking(ns, state, hackLevel) {
-    // Iniciar daemon si no está corriendo
     if (!isScriptRunning(ns, 'daemon.js')) {
         ns.print("👹 Iniciando daemon.js...");
         ns.run('daemon.js', 1, '--no-tail-windows');
@@ -169,7 +199,6 @@ async function phaseHacking(ns, state, hackLevel) {
     
     ns.print(`👹 Daemon activo | Hack: ${hackLevel}`);
     
-    // Si tenemos hack suficiente, pasar a factions
     if (hackLevel >= CONFIG.minHackForFactions) {
         ns.print("🎉 Hack 50+ alcanzado!");
         state.phase = PHASES.FACTIONS;
@@ -177,12 +206,6 @@ async function phaseHacking(ns, state, hackLevel) {
 }
 
 async function phaseFactions(ns, state, money) {
-    // Descargar work-for-factions si no existe
-    if (!ns.fileExists('work-for-factions.js')) {
-        await ns.wget(CONFIG.repoUrl + 'work-for-factions.js?t=' + Date.now(), 'work-for-factions.js');
-    }
-    
-    // Intentar iniciar work-for-factions
     if (!isScriptRunning(ns, 'work-for-factions.js')) {
         ns.print("🏛️ Iniciando work-for-factions.js...");
         const pid = ns.run('work-for-factions.js');
@@ -193,7 +216,6 @@ async function phaseFactions(ns, state, money) {
     
     ns.print(`🏛️ Factions activo | Dinero: $${formatMoney(money)}`);
     
-    // Si tenemos mucho dinero, intentar install
     if (money > 50e9) {
         ns.print("💰 Mucho dinero, verificando augmentations...");
         state.phase = PHASES.INSTALL;
@@ -203,12 +225,6 @@ async function phaseFactions(ns, state, money) {
 async function phaseInstall(ns, state) {
     ns.print("⬆️ Fase INSTALL: Instalando augmentations...");
     
-    // Descargar ascend si no existe
-    if (!ns.fileExists('ascend.js')) {
-        await ns.wget(CONFIG.repoUrl + 'ascend.js?t=' + Date.now(), 'ascend.js');
-    }
-    
-    // Matar todos los scripts excepto autopilot
     ns.print("🛑 Deteniendo scripts...");
     for (const proc of ns.ps('home')) {
         if (proc.filename !== 'autopilot.js') {
@@ -218,12 +234,10 @@ async function phaseInstall(ns, state) {
     
     await ns.sleep(3000);
     
-    // Ejecutar ascend
     ns.print("⬆️ Ejecutando ascend.js...");
     const pid = ns.run('ascend.js', 1, '--auto');
     
     if (pid > 0) {
-        // Esperar a que termine
         while (isScriptRunning(ns, 'ascend.js')) {
             await ns.sleep(1000);
         }
@@ -231,7 +245,6 @@ async function phaseInstall(ns, state) {
         await ns.sleep(5000);
     }
     
-    // Volver a hacking
     state.phase = PHASES.HACKING;
 }
 
