@@ -17,7 +17,7 @@
 /** @param {NS} ns **/
 export async function main(ns) {
 	ns.disableLog('ALL');
-	ns.tail();
+	ns.ui.openTail();
 	
 	const log = m => ns.print(m);
 	const fmt = n => n >= 1e9 ? (n/1e9).toFixed(1)+'b' : n >= 1e6 ? (n/1e6).toFixed(1)+'m' : Math.floor(n);
