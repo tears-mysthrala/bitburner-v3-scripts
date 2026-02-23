@@ -89,7 +89,7 @@ export async function main(ns) {
 	
 	// Scripts esenciales en orden
 	const essential = [
-		'zth.js',              // <-- NUEVO: versión ultra-lite
+		'run.js',              // <-- NUEVO: launcher principal (8GB compatible)
 		'casino.js',
 		'daemon.js',
 		'helpers.js',
@@ -107,7 +107,10 @@ export async function main(ns) {
 		'bladeburner.js',
 		'stockmaster.js',
 		'scan.js',
-		'zero-to-hero.js',     // <-- versión antigua (por si acaso)
+		'go.js',
+		'start.js',
+		'zth.js',
+		'zero-to-hero.js',
 		'bootstrap.js',
 	];
 	
@@ -148,21 +151,21 @@ export async function main(ns) {
 	ns.print("  🚀 Limpieza completa!");
 	ns.print("");
 	
-	if (ns.fileExists('zth.js')) {
-		ns.print("  Iniciando ZTH (Zero To Hero - Lite)...");
+	// Iniciar el launcher principal
+	if (ns.fileExists('run.js')) {
+		ns.print("  Iniciando RUN (Zero To Hero)...");
 		ns.print("");
-		ns.print("  Ejecuta: run zth.js");
 		ns.print("════════════════════════════════════════════════════════");
 		
 		await ns.sleep(2000);
-		const pid = ns.run('zth.js');
+		const pid = ns.run('run.js');
 		if (pid > 0) {
-			ns.print(`✅ zth.js iniciado (PID: ${pid})`);
-			ns.print("📋 Escribe: tail zth.js");
+			ns.print(`✅ run.js iniciado (PID: ${pid})`);
+			ns.print("📋 Escribe: tail run.js");
 		}
 	} else {
 		ns.print("  Ejecuta manualmente:");
-		ns.print("    run zth.js");
+		ns.print("    run run.js");
 		ns.print("════════════════════════════════════════════════════════");
 	}
 }
