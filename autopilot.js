@@ -149,6 +149,23 @@ async function phaseCasino(ns, state, money) {
         return;
     }
     
+    // Si ya tenemos >$500k y el casino no funciona (expulsados), saltar a hacking
+    if (money > 500000) {
+        const casinoPid = ns.run('casino.js');
+        if (casinoPid === 0) {
+            ns.print("[CASINO] Casino no disponible (expulsados?), saltando a HACKING");
+            state.phase = PHASES.HACKING;
+            return;
+        }
+        // Si se inició, matarlo y continuar
+        await ns.sleep(1000);
+        if (!isScriptRunning(ns, 'casino.js')) {
+            ns.print("[CASINO] Casino terminó rápido (ya expulsados?), saltando a HACKING");
+            state.phase = PHASES.HACKING;
+            return;
+        }
+    }
+    
     if (!isScriptRunning(ns, 'casino.js')) {
         ns.print("[CASINO] Iniciando casino.js...");
         ns.run('casino.js');
