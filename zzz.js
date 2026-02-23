@@ -1,74 +1,66 @@
 /** @param {NS} ns **/
 export async function main(ns) {
-	const VERSION = '3.0';
 	const URL = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
 	
-	// Verificar si hay nueva version de zzz.js
-	ns.tprint('Checking for updates...');
-	const newZzz = await ns.wget(URL + 'zzz.js?t=' + Date.now(), '/Temp/zzz-new.js');
-	if (newZzz) {
-		const current = ns.read('zzz.js');
-		const nueva = ns.read('/Temp/zzz-new.js');
-		if (current !== nueva && nueva.length > 100) {
-			ns.tprint('NEW VERSION FOUND! Restarting...');
-			await ns.sleep(500);
-			ns.rm('zzz.js');
-			await ns.write('zzz.js', nueva, 'w');
-			ns.spawn('zzz.js');
-			return;
+	// Obtener fase actual (default 0)
+	let phase = parseInt(ns.args[0]) || 0;
+	
+	ns.tprint('=== ZZZ v3.0 ===');
+	ns.tprint('Phase: ' + phase);
+	
+	// Verificar actualizaciones (cada 5 min aprox)
+	if (Date.now() % 300000 < 10000) {
+		ns.tprint('Checking for updates...');
+		try {
+			const tempFile = 'zzz-new-temp.js';
+			const ok = await ns.wget(URL + 'zzz.js?t=' + Date.now(), tempFile);
+			if (ok && ns.fileExists(tempFile)) {
+				const current = ns.read('zzz.js');
+				const nueva = ns.read(tempFile);
+				if (nueva && nueva.length > 100 && current !== nueva) {
+					ns.tprint('NEW VERSION! Restarting...');
+					ns.rm('zzz.js');
+					await ns.write('zzz.js', nueva, 'w');
+					ns.rm(tempFile);
+					ns.spawn('zzz.js', 1, phase.toString());
+					return;
+				}
+				ns.rm(tempFile);
+			}
+		} catch(e) {
+			ns.tprint('Update check failed: ' + e);
 		}
 	}
 	
-	// Descargar helpers.js (siempre necesario)
+	// Descargar helpers.js si no existe
 	if (!ns.fileExists('helpers.js')) {
 		ns.tprint('Downloading helpers.js...');
 		await ns.wget(URL + 'helpers.js?t=' + Date.now(), 'helpers.js');
 	}
 	
-	let phase = ns.args[0] || 0;
 	let loopCount = 0;
-	ns.tprint('Starting phase: ' + phase);
 	
 	while (true) {
 		const p = ns.getPlayer();
 		const m = p.money;
 		loopCount++;
 		
-		// Auto-update cada 5 minutos (100 loops)
-		if (loopCount % 100 === 0) {
-			const check = await ns.wget(URL + 'zzz.js?t=' + Date.now(), '/Temp/zzz-check.js');
-			if (check) {
-				const actual = ns.read('zzz.js');
-				const remoto = ns.read('/Temp/zzz-check.js');
-				if (actual !== remoto && remoto.length > 100) {
-					ns.tprint('UPDATE AVAILABLE! Spawning new version...');
-					await ns.sleep(500);
-					ns.rm('zzz.js');
-					await ns.write('zzz.js', remoto, 'w');
-					ns.spawn('zzz.js', 1, phase.toString());
-					return;
-				}
-			}
+		// Log de status cada 10 loops
+		if (loopCount % 10 === 0) {
+			ns.tprint('Phase ' + phase + ' | Money: $' + Math.floor(m).toLocaleString() + ' | Hack: ' + p.skills.hacking);
 		}
 		
 		// PHASE 0: Early money ($0 - $200k)
 		if (phase === 0) {
 			if (m >= 200000) {
-				ns.tprint('PHASE 0 COMPLETE - Downloading casino...');
-				// Descargar casino y deps
-				const files = ['casino.js'];
-				for (const f of files) {
-					if (!ns.fileExists(f)) {
-						await ns.wget(URL + f + '?t=' + Date.now(), f);
-						ns.tprint('  + ' + f);
-					}
-				}
+				ns.tprint('=== PHASE 0 COMPLETE ===');
+				ns.tprint('Money: $' + Math.floor(m));
 				phase = 1;
 				ns.spawn('zzz.js', 1, '1');
 				return;
 			}
 			
-			// Farm manual
+			// Farm manual en n00dles
 			try {
 				if (!ns.hasRootAccess('n00dles')) {
 					try { await ns.brutessh('n00dles'); } catch(e) {}
@@ -76,19 +68,23 @@ export async function main(ns) {
 					try { await ns.relaysmtp('n00dles'); } catch(e) {}
 					try { await ns.httpworm('n00dles'); } catch(e) {}
 					try { await ns.sqlinject('n00dles'); } catch(e) {}
-					try { await ns.nuke('n00dles'); } catch(e) {}
+					try { await ns.nuke('n00dles'); ns.tprint('NUKE OK'); } catch(e) {}
 				}
 				const earned = await ns.hack('n00dles');
-				if (earned > 0 && loopCount % 10 === 0) {
-					ns.tprint('Farm: $' + Math.floor(m) + ' (+' + Math.floor(earned) + ')');
+				if (earned > 0) {
+					ns.tprint('HACK: +$' + Math.floor(earned));
 				}
-			} catch(e) {}
+			} catch(e) {
+				// Si no puede hackear, esperar
+			}
 		}
 		
 		// PHASE 1: Casino ($200k - $10B)
 		else if (phase === 1) {
 			if (m >= 10e9) {
-				ns.tprint('PHASE 1 COMPLETE - Killing casino...');
+				ns.tprint('=== PHASE 1 COMPLETE ===');
+				ns.tprint('Money: $' + (m/1e9).toFixed(2) + 'B');
+				// Kill casino
 				for (const x of ns.ps('home')) {
 					if (x.filename === 'casino.js') ns.kill(x.pid);
 				}
@@ -97,32 +93,24 @@ export async function main(ns) {
 				return;
 			}
 			
-			// Asegurar que casino.js existe
+			// Descargar casino si no existe
 			if (!ns.fileExists('casino.js')) {
+				ns.tprint('Downloading casino.js...');
 				await ns.wget(URL + 'casino.js?t=' + Date.now(), 'casino.js');
 			}
 			
-			// Lanzar casino si no corre
+			// Lanzar casino
 			if (!ns.ps('home').find(x => x.filename === 'casino.js')) {
 				ns.tprint('Starting casino.js...');
 				ns.run('casino.js');
 			}
-			
-			if (loopCount % 20 === 0) {
-				ns.tprint('Casino: $' + (m / 1e9).toFixed(2) + 'B / $10B');
-			}
 		}
 		
-		// PHASE 2: Hacking setup ($10B+)
+		// PHASE 2: Setup daemon ($10B+)
 		else if (phase === 2) {
-			ns.tprint('PHASE 2 - Downloading daemon tools...');
+			ns.tprint('=== PHASE 2: SETUP ===');
 			
-			// Descargar todo lo necesario para daemon
-			const tools = [
-				'daemon.js', 'analyze-hack.js', 'host-manager.js',
-				'hacknet-upgrade-manager.js', 'spend-hacknet-hashes.js'
-			];
-			
+			const tools = ['daemon.js', 'analyze-hack.js', 'host-manager.js', 'hacknet-upgrade-manager.js'];
 			for (const f of tools) {
 				if (!ns.fileExists(f)) {
 					ns.tprint('Downloading ' + f + '...');
@@ -138,52 +126,52 @@ export async function main(ns) {
 		
 		// PHASE 3: Running daemon
 		else if (phase === 3) {
-			// Verificar daemon corre
+			// Iniciar daemon
 			if (!ns.ps('home').find(x => x.filename === 'daemon.js')) {
 				ns.tprint('Starting daemon.js...');
 				ns.run('daemon.js');
 			}
 			
-			// Host manager
+			// Iniciar host-manager
 			if (!ns.ps('home').find(x => x.filename === 'host-manager.js')) {
 				ns.run('host-manager.js', 1, '--max-spend', '0.3');
 			}
 			
+			// Pasar a fase 4 cuando tengamos nivel
 			if (p.skills.hacking >= 50) {
+				ns.tprint('=== UPGRADING TO PHASE 4 ===');
 				phase = 4;
 				ns.spawn('zzz.js', 1, '4');
 				return;
-			}
-			
-			if (loopCount % 30 === 0) {
-				ns.tprint('Daemon running - Hack: ' + p.skills.hacking);
 			}
 		}
 		
 		// PHASE 4: Factions
 		else if (phase === 4) {
+			// Descargar si no existe
 			if (!ns.fileExists('work-for-factions.js')) {
 				await ns.wget(URL + 'work-for-factions.js?t=' + Date.now(), 'work-for-factions.js');
 			}
+			if (!ns.fileExists('faction-manager.js')) {
+				await ns.wget(URL + 'faction-manager.js?t=' + Date.now(), 'faction-manager.js');
+			}
 			
+			// Iniciar
 			if (!ns.ps('home').find(x => x.filename === 'work-for-factions.js')) {
 				ns.run('work-for-factions.js');
 				ns.tprint('Started work-for-factions.js');
 			}
 			
-			if (!ns.fileExists('faction-manager.js')) {
-				await ns.wget(URL + 'faction-manager.js?t=' + Date.now(), 'faction-manager.js');
-			}
-			
-			// Check augmentations
+			// Check augmentations cada 50 loops
 			if (loopCount % 50 === 0) {
 				try {
 					const owned = ns.singularity.getOwnedAugmentations(true);
 					const base = ns.singularity.getOwnedAugmentations(false);
 					const newAugs = owned.length - base.length;
-					ns.tprint('Augmentations: ' + newAugs + ' new');
+					ns.tprint('New augmentations: ' + newAugs);
 					
 					if (newAugs >= 6) {
+						ns.tprint('=== UPGRADING TO PHASE 5 ===');
 						phase = 5;
 						ns.spawn('zzz.js', 1, '5');
 						return;
@@ -192,9 +180,9 @@ export async function main(ns) {
 			}
 		}
 		
-		// PHASE 5: Install
+		// PHASE 5: Install augmentations
 		else if (phase === 5) {
-			ns.tprint('PHASE 5 - Installing augmentations...');
+			ns.tprint('=== PHASE 5: INSTALLING ===');
 			
 			if (!ns.fileExists('ascend.js')) {
 				await ns.wget(URL + 'ascend.js?t=' + Date.now(), 'ascend.js');
@@ -206,16 +194,25 @@ export async function main(ns) {
 			}
 			await ns.sleep(3000);
 			
+			// Instalar
 			if (ns.run('ascend.js', 1, '--auto')) {
+				ns.tprint('Waiting for install...');
 				while (ns.ps('home').find(x => x.filename === 'ascend.js')) {
 					await ns.sleep(1000);
 				}
-				ns.tprint('INSTALL COMPLETE - Restarting...');
+				ns.tprint('=== INSTALL COMPLETE ===');
+				ns.tprint('Restarting in phase 3...');
 				await ns.sleep(5000);
 				phase = 3;
 				ns.spawn('zzz.js', 1, '3');
 				return;
 			}
+		}
+		
+		// Si phase es invalido, resetear a 0
+		else {
+			ns.tprint('ERROR: Invalid phase ' + phase + ', resetting to 0');
+			phase = 0;
 		}
 		
 		await ns.sleep(2000);
