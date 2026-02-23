@@ -2,14 +2,32 @@
 export async function main(ns) {
 	var u = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
 	var f = ['casino.js','daemon.js','ascend.js','work-for-factions.js'];
+	var lastUpdate = 0;
+	
+	// Descargar iniciales
 	for(var i = 0; i < f.length; i++) {
 		if(!ns.fileExists(f[i])) await ns.wget(u + f[i] + '?t=' + Date.now(), f[i]);
 	}
 	
 	var phase = 0;
+	var loopCount = 0;
+	
 	while(1) {
 		var p = ns.getPlayer();
 		var m = p.money;
+		loopCount++;
+		
+		// Verificar actualizaciones cada 10 minutos (6000 loops ~ 5 min con sleep 3s)
+		if(loopCount % 200 === 0) {
+			ns.tprint('Verificando actualizaciones...');
+			for(var i = 0; i < f.length; i++) {
+				// Solo re-descargar si el archivo local es muy viejo o no existe
+				// Usamos ?t= timestamp para forzar descarga fresca
+				var ok = await ns.wget(u + f[i] + '?t=' + Date.now(), f[i]);
+				if(ok) ns.tprint('  ' + f[i] + ' actualizado');
+			}
+			lastUpdate = Date.now();
+		}
 		
 		// Phase 0: Get money
 		if(phase == 0) {
@@ -25,7 +43,6 @@ export async function main(ns) {
 			else if(m < 200000) {
 				// Manual farm - nuke and hack n00dles
 				try {
-					// Try to get root on n00dles first
 					if(!ns.hasRootAccess('n00dles')) {
 						try { await ns.brutessh('n00dles'); } catch(e) {}
 						try { await ns.ftpcrack('n00dles'); } catch(e) {}
@@ -34,7 +51,6 @@ export async function main(ns) {
 						try { await ns.sqlinject('n00dles'); } catch(e) {}
 						try { await ns.nuke('n00dles'); ns.tprint('NUKE n00dles OK'); } catch(e) {}
 					}
-					// Now hack
 					var earned = await ns.hack('n00dles');
 					if(earned > 0) ns.tprint('HACK n00dles: +' + Math.floor(earned));
 				} catch(e) {
