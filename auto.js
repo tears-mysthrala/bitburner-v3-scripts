@@ -17,7 +17,7 @@ export async function main(ns) {
 	log('Descargando scripts...');
 	
 	const url = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
-	const need = ['casino.js','daemon.js','ascend.js','work-for-factions.js','host-manager.js','kill-all-scripts.js'];
+	const need = ['early.js','casino.js','daemon.js','ascend.js','work-for-factions.js','host-manager.js','kill-all-scripts.js'];
 	
 	for (const f of need) {
 		if (!ns.fileExists(f)) {
@@ -26,7 +26,23 @@ export async function main(ns) {
 		}
 	}
 	
-	log('Iniciando...');
+	// Verificar dinero inicial
+	const initialMoney = ns.getPlayer().money;
+	
+	// FASE 0: Early game ($0 a $200k)
+	if (initialMoney < 200000) {
+		log('💰 Dinero insuficiente para casino');
+		log('Iniciando fase EARLY...');
+		ns.run('early.js');
+		
+		// Esperar a que early.js termine
+		while (ns.ps('home').some(x => x.filename === 'early.js')) {
+			await ns.sleep(1000);
+		}
+		log('✅ Fase EARLY completada');
+	}
+	
+	log('Iniciando ciclo principal...');
 	let phase = 0;
 	
 	while (true) {

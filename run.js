@@ -27,13 +27,32 @@ export async function main(ns) {
 	log('Descargando scripts...');
 	
 	const url = 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/';
-	const files = ['casino.js','daemon.js','ascend.js','work-for-factions.js','host-manager.js','kill-all-scripts.js'];
+	const files = ['early.js','casino.js','daemon.js','ascend.js','work-for-factions.js','host-manager.js','kill-all-scripts.js'];
 	
 	for (const f of files) {
 		if (!ns.fileExists(f)) {
 			await ns.wget(url + f + '?t=' + Date.now(), f);
 			log('  + ' + f);
 		}
+	}
+	
+	// FASE EARLY: Farmear $200k iniciales si no tenemos
+	const initialMoney = ns.getPlayer().money;
+	if (initialMoney < 200000) {
+		log('💰 Dinero insuficiente para casino');
+		log('Iniciando early.js para farmear $200k...');
+		ns.run('early.js');
+		
+		// Esperar a que termine
+		while (true) {
+			let stillRunning = false;
+			for (const proc of ns.ps('home')) {
+				if (proc.filename === 'early.js') stillRunning = true;
+			}
+			if (!stillRunning) break;
+			await ns.sleep(1000);
+		}
+		log('✅ $200k alcanzados');
 	}
 	
 	let phase = 0;
