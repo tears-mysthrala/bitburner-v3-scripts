@@ -1,6 +1,6 @@
 /**
  * AUTOPILOT - Bitburner Automation
- * Version: 1.0
+ * Version: 1.1
  * 
  * Script principal que automatiza el juego desde cero.
  * Uso: run autopilot.js
