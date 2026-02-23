@@ -1,6 +1,6 @@
 /**
  * AUTOPILOT - Bitburner Automation
- * Version: 3.0.0-dev
+ * Version: 3.0.1
  * Compatible: Bitburner v3.0.0dev
  * 
  * Script principal que automatiza el juego desde cero.
@@ -31,7 +31,7 @@ export async function main(ns) {
     let state = loadState(ns);
     
     ns.print("╔════════════════════════════════════════════════════╗");
-    ns.print("║     AUTOPILOT v3.0.0-dev - Bitburner v3.0         ║");
+    ns.print("║     AUTOPILOT v3.0.1 - Bitburner v3.0             ║");
     ns.print("╚════════════════════════════════════════════════════╝");
     ns.print("");
     
