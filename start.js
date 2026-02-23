@@ -12,7 +12,7 @@ export async function main(ns) {
 	// Código ejecutado via eval para evitar análisis estático de RAM
 	const code = `
 		ns.disableLog('ALL');
-		ns.tail();
+		ns.ui.openTail();
 		
 		const fmt = (n) => n >= 1e9 ? (n/1e9).toFixed(1)+'b' : (n/1e6).toFixed(1)+'m';
 		const log = (m) => ns.print('['+Math.floor(Date.now()/60000)+'m] '+m);

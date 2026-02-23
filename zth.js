@@ -1,7 +1,7 @@
 /** @param {NS} ns **/
 export async function main(ns) {
 	ns.disableLog('ALL');
-	ns.tail();
+	ns.ui.openTail();
 	const $ = (n) => n >= 1e9 ? (n/1e9).toFixed(1) + 'b' : (n/1e6).toFixed(1) + 'm';
 	const T = (ms) => { const s = Math.floor(ms/1000), m = Math.floor(s/60); return m > 0 ? m + 'm' : s + 's'; };
 	let phase = 0, start = Date.now(), last = start, p = ns.getPlayer();

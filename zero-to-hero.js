@@ -36,10 +36,10 @@ export async function main(ns) {
 	ns.enableLog('print');
 	
 	// Abrir ventana de log
-	ns.tail();
+	ns.ui.openTail();
 	await ns.sleep(100);
-	ns.ui.moveTail(50, 50);
-	ns.ui.resizeTail(900, 500);
+	if (ns.ui.moveTail) ns.ui.moveTail(50, 50);
+	if (ns.ui.resizeTail) ns.ui.resizeTail(900, 500);
 	
 	banner(ns, `ZERO TO HERO v${VERSION}`);
 	log(ns, "Modo: Ultra-Lite (8GB RAM compatible)");

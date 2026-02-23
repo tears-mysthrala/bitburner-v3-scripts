@@ -10,10 +10,10 @@
 /** @param {NS} ns **/
 export async function main(ns) {
 	ns.disableLog('ALL');
-	ns.tail();
+	ns.ui.openTail();
 	await ns.sleep(100);
-	ns.ui.moveTail(50, 50);
-	ns.ui.resizeTail(800, 400);
+	if (ns.ui.moveTail) ns.ui.moveTail(50, 50);
+	if (ns.ui.resizeTail) ns.ui.resizeTail(800, 400);
 	
 	const log = m => ns.print(`[${Math.floor(Date.now()/60000)}m] ${m}`);
 	const running = s => ns.ps('home').some(p => p.filename === s);
