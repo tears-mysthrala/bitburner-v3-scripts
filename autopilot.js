@@ -7,7 +7,7 @@
  */
 
 const CONFIG = {
-    repoUrl: 'https://raw.githubusercontent.com/tears-mysthrala/bitburner-v3-scripts/main/',
+    repoUrl: 'https://raw.githubusercontent.com/alainbryden/bitburner-scripts/main/',
     casinoGoal: 10e9,  // $10B
     minHackForFactions: 50,
     checkInterval: 10000,  // 10 segundos
